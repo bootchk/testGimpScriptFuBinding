@@ -24,8 +24,14 @@ open terminal
 >gimp
 File>New, choose OK
 Choose menu Test>Scriptfu binding
-Look for "Fail: expected ..."
-You will also see error messages from GimpFu, since this is a GimpFu plugin.
+Search console for "Fail:" (case sensitive) these are test failures.
+
+You will also see:
+- error messages from GimpFu, since this is a GimpFu plugin.
+- error messages from Gimp
+These do not mean the test failed (since we test error cases.)
+
+
 
 TODO
 Write a single PDB procedure that takes/return all GIMP types.
@@ -267,7 +273,8 @@ def plugin_func(image, drawable):
       We can only check for errors in adapting the returned result.
       """
 
-      # no in args, result is type int
+      # no in args
+      # result type int
       pdb.plug_in_script_fu_eval('(gimp-context-get-transform-direction)')
       expect("success")
 
@@ -275,13 +282,7 @@ def plugin_func(image, drawable):
       pdb.plug_in_script_fu_eval('(gimp-unit-get-factor 1)')
       expect("success")
 
-      # float array result
-      pdb.plug_in_script_fu_eval('(gimp-context-get-line-dash-pattern)')
-      expect("success")
-
-      # string array result
-      pdb.plug_in_script_fu_eval('(gimp-get-parasite-list)')
-      expect("success")
+      """ Gimp type (objects) results """
 
       # image result.  1 is literal for image type enum
       pdb.plug_in_script_fu_eval('(gimp-image-new 10 30 1)')
@@ -294,20 +295,37 @@ def plugin_func(image, drawable):
       pdb.plug_in_script_fu_eval('(gimp-image-get-active-drawable (car (gimp-image-new 10 30 1)))')
       expect("success")
 
-      # Int8Array
-      # gimp-image-get-color-profile ( Image ) => Int Int8Array
-      # TODO gimp-image-set-colormap ( Image Int Int8Array ) =>
+      # GimpItem result
+      # gimp-item-get-parent ( Item ) => Item
+      pdb.plug_in_script_fu_eval('(gimp-item-get-parent 1)')
+      expect("success")
 
-      # RGBArray
+
+      """ Array results """
+
+      # float array result
+      pdb.plug_in_script_fu_eval('(gimp-context-get-line-dash-pattern)')
+      expect("success")
+
+      # string array result
+      pdb.plug_in_script_fu_eval('(gimp-get-parasite-list)')
+      expect("success")
+
+      # RGBArray result
       # gimp-palette-get-colors ( String ) => Int RGBArray
       # Bears is a palette name
       pdb.plug_in_script_fu_eval('(gimp-palette-get-colors "Bears")')
       expect("success")
 
-      # Int8Array
+      # Int8Array result
+      # gimp-brush-get-pixels ( String ) => Int Int Int Int Int8Array Int Int Int8Array
       # assert foo is a brush name (use a stock one)
       pdb.plug_in_script_fu_eval('(gimp-brush-get-pixels "foo")')
       expect("success")
+
+      # gimp-image-get-color-profile ( Image ) => Int Int8Array
+      pdb.plug_in_script_fu_eval('(gimp-image-get-color-profile (car (gimp-image-new 10 30 1)))')
+
 
       # TODO call a procedure that maliciously returns an array length
       # not matching the array size
@@ -320,7 +338,7 @@ def plugin_func(image, drawable):
 
 
 register(
-      "python-fu-test-script-fu-errors",
+      "python-fu-test-script-fu-binding",
       "Test ScriptFu binding to PDB",
       "A test program. Non-interactive.  Start in a console.  Search for Fail",
       "Lloyd Konneker",

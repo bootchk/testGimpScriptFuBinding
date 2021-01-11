@@ -13,8 +13,7 @@ Kinds of cases:
 - for each GIMP type or GType that ScriptFu is designed to handle (accept/return)
 
 Only tests the binding, that is, that ScriptFu attempts (or not) to call a PDB procedure.
-Understand the types procedures should return,
-but not what values any given procedure should return.
+Understands the types procedures should return, but not what values any given procedure should return.
 
 Is a GimpFu plugin, requires GimpFu v3 repository.
 (Could be translated to a GIMP v3 Python plugin using GI)
@@ -30,3 +29,5 @@ to a folder named testGimpScriptFuBinding
 usually in  ~/.config/GIMP/2.0/plug-ins
 
 Appears in GIMP menus as Test>ScriptFu binding
+
+For more information, see comments in code.
