@@ -44,6 +44,8 @@ from gimpfu import *
 
 # Note that a PDB procedure status is string "success" on success
 
+def case(msg):
+    print(f"Case: {msg}")
 
 def expect(expected_status):
     """
@@ -65,6 +67,7 @@ def plugin_func(image, drawable):
 
       """
       Basic sanity
+      ============
       """
 
       # valid Scheme call to PDB
@@ -75,14 +78,17 @@ def plugin_func(image, drawable):
 
       """
       Test known flaws in ScriptFu.
+      ============================
       These tests will change as ScriptFu is fixed.
       """
 
       # GIMP types unhandled
+
       # second arg is type ObjectArray
       # ScriptFu not handle yet, doesn't matter what we pass
       pdb.plug_in_script_fu_eval('(gimp-edit-copy 1 "foo")')
-      expect("Error: Argument 2 for gimp-edit-copy is unhandled type GimpObjectArray \n")
+      # Circa 2020: expect("Error: Argument 2 for gimp-edit-copy is unhandled type GimpObjectArray \n")
+      expect("Error: in script, expected type: list or numeric for argument 2 to gimp-edit-copy  \n")
 
       """
       Test bad actors: calling plugins that crash or fail semantically
@@ -101,7 +107,11 @@ def plugin_func(image, drawable):
 
 
       """
-      procedure name tests
+      Test basic ScriptFu calling mechanism.
+      ======================================
+
+      An evaluated list whose car is an unquoted name of a PDB procedure
+      should result in a call to the PDB.
       """
 
       # invalid procedure name, not quoted
@@ -115,14 +125,24 @@ def plugin_func(image, drawable):
       expect("Error: illegal function \n")
 
       # Excluded procedure
-      # It takes a run mode (but why?), here 2 is NONINTERACTIVE
-      pdb.plug_in_script_fu_eval('(script-fu-refresh 2)')
+      # It takes a run mode
+      pdb.plug_in_script_fu_eval('(script-fu-refresh RUN-NONINTERACTIVE)')
       expect("Error: A script cannot refresh scripts \n")
+
+      # !!! Nested calls to PDB are supported.
+      # Each call to a PDB procedure returns a list, whose first element must be car'd
+      pdb.plug_in_script_fu_eval('(gimp-image-get-active-drawable (car (gimp-image-new 10 30 1)))')
+      expect("success")
+
+
 
 
 
       """
-      Test IN arg adaption: error cases
+      Test ScriptFu binding of args to PDB procedures, i.e. binding in forward direction
+      ==================================================================================
+
+      error cases
       """
 
       # error: missing arg
@@ -226,6 +246,16 @@ def plugin_func(image, drawable):
       pdb.plug_in_script_fu_eval('''(extension-gimp-help 1 '(1.0) 1 '("bar"))''')
       expect("Error: in script, expected type: string for element 1 of argument 2 to extension-gimp-help  (1.0) \n")
 
+      # Wrong type where an image ID of type numeric should be passed
+      pdb.plug_in_script_fu_eval('(gimp-image-get-active-drawable "1")')
+      expect("Error: in script, expected type: numeric for argument 1 to gimp-image-get-active-drawable  \n")
+
+      """
+      Test ScriptFu binding of args to PDB procedures, i.e. binding in forward direction
+      ==================================================================================
+
+      non error cases
+      """
       # Miscellaneous arg types
 
       # Parasite
@@ -250,20 +280,68 @@ def plugin_func(image, drawable):
       pdb.plug_in_script_fu_eval('(gimp-image-get-active-drawable 1)')
       expect("success")
 
-      # Wrong type where an ID of type numeric should be passed
-      pdb.plug_in_script_fu_eval('(gimp-image-get-active-drawable "1")')
-      expect("Error: in script, expected type: numeric for argument 1 to gimp-image-get-active-drawable  \n")
-
       # Not an error: passing a float literal for an ID usually type int
       # I suppose TinyScheme rounds it?
       pdb.plug_in_script_fu_eval('(gimp-image-get-active-drawable 1.01)')
       expect("success")
 
+      """
+      GimpDrawable and GimpObjectArray of GimpDrawable
+      """
 
+      # procedure taking single GimpDrawable (which is a numeric in ScriptFu)
+      pdb.plug_in_script_fu_eval('(gimp-drawable-edit-clear (car (gimp-image-get-active-drawable  1)))')
+      expect("success")
+
+      # procedure taking a GimpObjectArray, passing a single drawable ID
+      # FUTURE: enhance ScriptFu to allow this
+      pdb.plug_in_script_fu_eval('(gimp-edit-copy 1)')
+      expect("Error: in script, wrong number of arguments for gimp-edit-copy (expected 2 but received 1) \n")
+
+      # Expect ScriptFu to wrap the single GimpDrawable
+      # pdb.plug_in_script_fu_eval('(gimp-edit-copy (gimp-image-get-active-drawable  1))')
+
+      # procedure taking a GimpObjectArray, passing length numeric and list of ID's
+      # Here, '1' is usually a valid drawable ID
+      pdb.plug_in_script_fu_eval("(gimp-edit-copy 1 '(1))")
+      expect("success")
+      # alternative script
+      pdb.plug_in_script_fu_eval("(gimp-edit-copy 1 (list 1))")
+      expect("success")
+
+      case("len 1, but empty list passed for GimpObjectArray")
+      # binds wo error
+      # procedure executes wo error
+      pdb.plug_in_script_fu_eval("(gimp-edit-copy 1 ())")
+      expect("success")
+
+      # len 0 and empty list passed for GimpObjectArray
+      pdb.plug_in_script_fu_eval("(gimp-edit-copy 0 ())")
+      expect("success")
+
+
+
+
+      # invalid drawable ID
+      pdb.plug_in_script_fu_eval('(gimp-drawable-edit-clear 666)')
+      expect("Error: Invalid drawable ID (666) \n")
+
+      # TODO: -1 for NULL drawable
+
+      # TODO returned GimpObjectArray
+
+
+      # GFile
+      # GIMP 3, a ScriptFu script passes one string (which ScriptFu converts to a GFile)
+      # GIMP 2 used two strings
+      # The filename is bad, expect no errors in binding, but error in procedure
+      pdb.plug_in_script_fu_eval('(gimp-file-load RUN-NONINTERACTIVE "/tmp/foo")')
+      expect("Error: Procedure execution of gimp-file-load failed: Error opening file /tmp/foo: No such file or directory \n")
 
 
       """
-      Test ScriptFu handles results.
+      Test ScriptFu binding of results, i.e. binding in backward direction
+      ====================================================================
 
       But plug_in_script_fu_eval does not return values from the evaluated string.
       IOW plug_in_script_fu_eval only offers side effects on images.
