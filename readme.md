@@ -42,26 +42,37 @@ Appears in GIMP menus as Test>ScriptFu binding
 # Running
 
    - Start GIMP in a console.
-   - Open some image file
+   - Open some image file (to enable the plugin TODO fix that)
    - Choose Test>ScriptFu binding...
+
+??? Uses the current image?
+- More thorough testing if the image has vectors
+, the plugin often uses image and layer with ID 1
+
 
 Expect no dialog, there are no choices for you to make.
 
-Expect many error dialogs, but those are usually from failed procedures, not failed bindings.
+Expect many error dialogs, but those are usually from failed procedures
+that by the test design should fail, not failed bindings.
 
 Expect a sequence of all "Pass" to print on the console.
-"Pass" means the test succeeded and the binding behaves as expected.
+"Pass" means the test succeeded and the binding behaves as expected,
+not that the PDB procedure call necessarily passed.
 
 You will also see interspersed log messages, from GIMP and GimpFu
 (WARNING and CRITICAL log messages cannot be supressed.)
+If you really want to follow along, export G_MESSAGES_DEBUG=scriptfu,
+and then all INFO and DEBUG messages from scriptfu will be interspersed also.
 
 A "Fail" demands action.
-When GIMP has changed, eliminating a deficiency of GIMP,
-then update this plugin to expect the new behavior of GIMP.
+When GIMP has changed, eliminating or adding a deficiency of GIMP,
+then update this plugin to expect the new wrong behavior of GIMP,
+or fix GIMP.
 
 It is also possible that the support machinery (GimpFu) has changed,
 giving a false "Fail".
-Then also update this plugin.
+Then also update this plugin for the new behavior,
+or fix the machinery.
 
 
 # See also
