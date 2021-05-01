@@ -29,7 +29,8 @@ Search console for "Fail:" (test sensitive) these are  failures.
 You will also see:
 - error messages from GimpFu, since this is a GimpFu plugin.
 - error messages from Gimp
-These do not mean the  failed (since we  error tests.)
+These do not mean the test failed
+(since we test that errored scripts return error messages.)
 
 
 TODO
@@ -42,6 +43,7 @@ from gimpfu import *
 
 
 # Note that a PDB procedure status is string "success" on success
+failed_tests = {}
 
 def test(description, construct, expected_status):
     """
@@ -51,6 +53,7 @@ def test(description, construct, expected_status):
     construct: Scriptfu Scheme text
     expected: expected text of PDB status result
     """
+    global failure_count
 
     print(f"\nCase: {description}")
 
@@ -64,9 +67,9 @@ def test(description, construct, expected_status):
     else:
         # print with repr() so whitespace visible
         print(f"Fail: expected:{repr(expected_status)}, actual:{repr(actual_status)}")
+        failed_tests[description] = 1
 
 # !!! Some expected strings have trailing space and newline
-
 
 
 def plugin_func(image, drawable):
@@ -84,8 +87,6 @@ def plugin_func(image, drawable):
     Basic sanity
     ============
     """
-
-
     test("Basic valid Scheme call to PDB",
         # literal 1 where enum expected
         "(gimp-unit-get-factor 1)",
@@ -98,13 +99,10 @@ def plugin_func(image, drawable):
     These tests will change as ScriptFu is fixed.
     """
 
-    # GIMP types that ScriptFu does not handle
-
-    # ScriptFu not handle yet, doesn't matter what we pass
-    # Circa 2020: "Error: Argument 2 for gimp-edit-copy is unhandled type GimpObjectArray \n")
-    test("second arg is type ObjectArray",
-        '(gimp-edit-copy 1 "foo")',
-        "Error: in script, expected type: list or numeric for argument 2 to gimp-edit-copy  \n")
+    """ Circa 2020:
+    criptFu not handle ObjectArray.
+    "Error: Argument 2 for gimp-edit-copy is unhandled type GimpObjectArray \n")
+    """
 
 
 
@@ -120,7 +118,8 @@ def plugin_func(image, drawable):
         '(gimp-brush-get-hardness "Zed")',
         "Error: Procedure execution of gimp-brush-get-hardness failed on invalid input arguments: Brush 'Zed' not found \n")
 
-    # TODO values out of range
+    # TODO separate test for "value is out of range"
+    # It is covered by some tests below.
 
 
 
@@ -156,24 +155,32 @@ def plugin_func(image, drawable):
     Test ScriptFu binding of args to PDB procedures, i.e. binding in forward direction
     ==================================================================================
 
-    error tests
+    error tests, where the script signature is wrong
     """
 
+    # Formerly:
+    # "Error: in script, wrong number of arguments for gimp-unit-get-factor (expected 1 but received 0) \n"
+    # Now, should get warning in console, and procedure fails
+    '''
     test("error: missing arg",
         "(gimp-unit-get-factor)",
-        "Error: in script, wrong number of arguments for gimp-unit-get-factor (expected 1 but received 0) \n")
+        "Error: in script, expected type: numeric for argument 1 to gimp-unit-get-factor  \n")
+    '''
 
+    # Formerly: "Error: in script, wrong number of arguments for gimp-unit-get-factor (expected 1 but received 2) \n"
+    # Now, should get warning in console, and but procedure not fail
     test("error: extra arg",
         "(gimp-unit-get-factor 1 2)",
-        "Error: in script, wrong number of arguments for gimp-unit-get-factor (expected 1 but received 2) \n")
+        "success")
 
     test("error: arg has wrong type",
         '(gimp-unit-get-factor "foo")',
         "Error: in script, expected type: numeric for argument 1 to gimp-unit-get-factor  \n")
 
-    test("valid float array having one element",
-        '(gimp-context-set-line-dash-pattern 1 #(1.666))',
-        "success")
+
+    """
+    Array errors.
+    """
 
     """
     If G_MESSAGES_DEBUG=scriptfu, console should print like:
@@ -185,7 +192,7 @@ def plugin_func(image, drawable):
         '(gimp-context-set-line-dash-pattern 2 0)',
         "Error: in script, expected type: vector for argument 2 to gimp-context-set-line-dash-pattern  \n")
 
-    test("what some novices might try, NIL is not a symbol in TinyScheme",
+    test("error: what some novices might try, NIL is not a symbol in TinyScheme",
         '(gimp-context-set-line-dash-pattern 2 NIL)',
         "Error: eval: unbound variable: NIL \n")
 
@@ -200,16 +207,16 @@ def plugin_func(image, drawable):
     # TODO:
     # error: string array arg is empty: empty list
     # '''(??? 0 '() )''')
-    # Hard to , no PDB procedure (that we can  with) takes a string array
+    # Hard to test , no PDB procedure (that we can  test with) takes a string array
 
     # TODO:
     # error: string array arg is list of null string
     # '''(??? 1 '("") )''')
-    # Hard to , no PDB procedure (that we can  with) takes a string array
+    # Hard to test, no PDB procedure (that we can test with) takes a string array
 
     # TODO:
     # valid string array passed as a list
-    # Hard to , no PDB procedure (that we can  with) takes a string array
+    # Hard to test , no PDB procedure (that we can test with) takes a string array
     # '(??? 2 '("foo", "bar") )',
     """
     If G_MESSAGES_DEBUG=scriptfu, console should print like:
@@ -253,17 +260,21 @@ def plugin_func(image, drawable):
     # !!! Only a few PDB procedure takes a StringArray
     #
     # !!! But we can't use extension-gimp-help with syntactically valid args
-    # because it never returns (stops this ), even though passed garbage.
+    # because it never returns (stops this test), even though passed garbage.
     # '''(extension-gimp-help 1 '("foo") 1 '("bar"))''')
     # expect pass ScriptFu parsing, but procedure execution error?
 
-    test("invalid container type",
+    test("error: invalid container type",
+        # pass a vector where list expected
         '''(extension-gimp-help 1 #("foo") 1 '("bar"))''',
         "Error: in script, expected type: list for argument 2 to extension-gimp-help  \n")
 
-    test("invalid element type in container",
+    test("error: invalid element type in container",
+        # pass a list of numeric where list of string expected
         '''(extension-gimp-help 1 '(1.0) 1 '("bar"))''',
         "Error: in script, expected type: string for element 1 of argument 2 to extension-gimp-help  (1.0) \n")
+
+
 
     test("error: wrong type where an image ID of type numeric should be passed",
         '(gimp-image-get-active-drawable "1")',
@@ -275,14 +286,83 @@ def plugin_func(image, drawable):
 
     non error tests
     """
-    # Miscellaneous arg types
 
+    """
+    We don't test fundamental types separately.
+    They are probably covered by other tests.
+    They are also fundamentally the same: yield numeric type to a script.
+
+    Int, UInt, UChar, Boolean, Enum,
+    Double
+    String
+    """
+
+    """
+    Image, Item, Drawable, Layer, LayerMask, Channel, Display
+    All similar, yield numeric for ID.
+    We only test a few explicitly, others are probably incidentally covered other tests.
+    """
+
+    # Assuming there is an image open at test time, its ID should be 1?
+    # gimp-image-get-active-drawable ( Image ) => Drawable
+    test("Image : ScriptFu uses ID's i.e. type int",
+        '(gimp-image-get-active-drawable 1)',
+        "success")
+
+    """
+    Create and delete a display.
+    gimp-display-new ( Image ) => Display
+    gimp-display-delete ( Display ) =>
+    1 is usually the image
+    """
+    test("Display",
+        "(gimp-display-delete (car (gimp-display-new 1)))",
+        "success")
+
+
+    """ Arrays """
+
+    test("Float array having one element",
+        '(gimp-context-set-line-dash-pattern 1 #(1.666))',
+        "success")
+
+    test("Float array having two elements",
+        '(gimp-context-set-line-dash-pattern 2 #(1.666 3.14))',
+        "success")
+
+
+    # gimp-image-set-colormap ( Image Int Int8Array ) =>
+    # 1 is image ID, 3 is size of uchar array
+    # one color, one 3-tuple for RGB
+    # Can you set a colormap of one color?
+    test("Int8Array",
+        '(gimp-image-set-colormap 1 3 #(1 2 3))',
+        "success")
+
+    # TODO file-gih-save takes a StringArray
+    # The only procedure that does.
+    # Its seems obscure and probably not used.
+
+    # file-pdf-load takes a Int32Array
+    # It is the rare one that does.
+    # file-pdf-load ( Int Object String Int Int32Array ) => Image
+    # 1 is boolean for reverse order, 2 is page count, (3 4) is list of pages
+    # We expect it to bind, but to fail to find the file.
+    test("Int32Array",
+        '(file-pdf-load RUN-NONINTERACTIVE  "/tmp/foo.pdf" "password" 1 2 #(3 4))',
+        "Error: Procedure execution of file-pdf-load failed: Could not load '/tmp/foo.pdf': No such file or directory \n")
+
+    # TODO RGBArray
+    # I can't find a procedure that takes.
+
+
+    """ Miscellaneous complicated GIMP types """
+
+    # gimp-attach-parasite ( Parasite ) =>
     test("Parasite: repr in ScriptFu is list literal '(name string, flags numeric, data string)",
-        # gimp-attach-parasite ( Parasite ) =>
         '''(gimp-attach-parasite '("foo" 1 "bar"))''',
         "success")
 
-    # Int8Array  Int8
 
     test("RGB aka color: where arg is a literal tuple",
         "(gimp-context-set-background '( 1 2 3))",
@@ -292,12 +372,23 @@ def plugin_func(image, drawable):
         '(gimp-context-set-background "black")',
         "success")
 
-    test("Image : ScriptFu uses ID's i.e. type int",
-        # Assuming there is an image open at time of ing, its ID should be 1?
-        # gimp-image-get-active-drawable ( Image ) => Drawable
-        '(gimp-image-get-active-drawable 1)',
+    # Scriptfu expects a list of length 3
+    test("error: RGB aka color: where arg is a too-short list",
+        "(gimp-context-set-background '( 1 2 ))",
+        "Error: in script, expected type: color string or list for argument 1 to gimp-context-set-background  \n")
+
+    # Scriptfu expects a list of length 3 of numeric
+    test("error: RGB aka color: where list is not of numeric",
+        '''(gimp-context-set-background '( 1 2 "foo" ))''',
+        "Error: in script, expected type: numeric for element 3 of argument 1 to gimp-context-set-background  \n")
+
+    # Scriptfu clamps to 255 without complaint
+    test("error: RGB aka color: where arg is a tuple of too-large integers",
+        "(gimp-context-set-background '( 512 666  64456))",
         "success")
 
+
+    # TODO move this
     test("Not an error: passing a float literal for an ID usually type int",
         # I suppose TinyScheme rounds it?
         '(gimp-image-get-active-drawable 1.01)',
@@ -308,24 +399,65 @@ def plugin_func(image, drawable):
     GimpDrawable and GimpObjectArray of GimpDrawable
     """
 
-    test("single GimpDrawable (which is a numeric in ScriptFu)",
+    test("single GimpDrawable (a numeric ID in ScriptFu)",
         '(gimp-drawable-edit-clear (car (gimp-image-get-active-drawable  1)))',
         "success")
 
+    test("Error: Second arg is type ObjectArray a quoted list of bound variables",
+        '''(let*
+             (
+              (drawable 1)
+             )
+           (gimp-edit-copy 1 '(drawable))
+           )
+        ''',
+        "Error: Expected numeric in drawable list (drawable) \n")
+
+    test("Second arg is type ObjectArray a list of bound variables",
+        '''(let*
+             (
+              (drawable 1)
+             )
+           (gimp-edit-copy 1 (list drawable))
+           )
+        ''',
+        "success")
+
+
+    """
+    Enhanced v3 ScriptFu allows this changed signature from v2.
+    The signature was changed for multi-layer.
+    Expect ScriptFu to wrap the single GimpDrawable in a ObjectArray
+    Before the enhancement:
+    "Error: in script, wrong number of arguments for gimp-edit-copy (expected 2 but received 1) \n"
+    """
     test("GimpObjectArray, passing a single drawable ID",
-        # FUTURE: enhance ScriptFu to allow this
         '(gimp-edit-copy 1)',
-        "Error: in script, wrong number of arguments for gimp-edit-copy (expected 2 but received 1) \n")
+        "success")
+    # Alternative script: '(gimp-edit-copy (gimp-image-get-active-drawable  1))',
 
-    # Expect ScriptFu to wrap the single GimpDrawable
-    # '(gimp-edit-copy (gimp-image-get-active-drawable  1))',
-
+    # This is the new, multi-layer signature
     test("GimpObjectArray, passing length numeric and list of ID's",
-        # Here, '1' is usually a valid drawable ID
+        # Here, '(1)' is usually a valid drawable ID
         "(gimp-edit-copy 1 '(1))",
         "success")
     # alternative script
     #"(gimp-edit-copy 1 (list 1))",
+
+    # With the fixup feature, Scriptfu will succeed here, discarding the "foo" as an extra arg
+    # Without the fixup feature, "Error: in script, expected type: list for argument 2 to gimp-edit-copy  \n")
+    test("Error: second arg is type ObjectArray but string passed",
+        '(gimp-edit-copy 1 "foo")',
+        "success")
+
+    test("Error: second arg is type ObjectArray but unquoted list passed",
+        '(gimp-edit-copy 1 (1))',
+        "Error: illegal function \n")
+
+    test("Error: second arg is type ObjectArray but list of string passed",
+        '(gimp-edit-copy 1 ("foo"))',
+        "Error: illegal function \n")
+
 
 
     '''
@@ -347,6 +479,7 @@ def plugin_func(image, drawable):
         "Error: Invalid drawable ID (666) \n")
 
     # TODO: -1 for NULL drawable
+    # TODO find a PDB procedure that takes a null drawable
 
 
 
@@ -387,6 +520,14 @@ def plugin_func(image, drawable):
         "success")
 
     """ Gimp type (objects) results """
+    """
+    For testing the binding,
+    all GIMP object types can be covered by one case.
+    Because there is only once case in scheme-wrapper.c.
+    All have a numeric ID, which is what we return to the script.
+    I.E. GimpImage and all subclasses of GimpItem can be covered by one case.
+    I.E. we don't need a separate test for GimpLayer.
+    """
 
     test("image result.",
         # 1 is literal for image type enum
@@ -407,6 +548,11 @@ def plugin_func(image, drawable):
         '(gimp-item-get-parent 1)',
         "success")
 
+    """ Special Gimp type (objects) results """
+    """ These are separate cases in scheme-wrapper.c
+    so for complete coverage, we test each.
+    """
+
     test("GimpVectors result",
         # image 1.  Put vectors in it before .
         '(gimp-image-get-active-vectors 1)',
@@ -425,9 +571,11 @@ def plugin_func(image, drawable):
         '(gimp-get-parasite "foo")',
         "success")
 
+
     test("Parasite result: none",
         # gimp-get-parasite ( String ) => Parasite
-        # find parasite that doesn't exist. Evidently, the procedure fails
+        # find parasite that doesn't exist. Evidently, the procedure fails.
+        # GIMP inadequacy
         '(gimp-get-parasite "zed")',
         "Error: Procedure execution of gimp-get-parasite failed \n")
 
@@ -498,7 +646,14 @@ def plugin_func(image, drawable):
     # write a plugin that takes and returns all types
     # repetitively call it with fuzzed args
 
-    #TODO return a value if all s passed
+    #TODO return a value if all tests passed
+
+    print(">>>>>>>>>>> Test Gimp Scriptfu Binding: Summary <<<<<<<<<<<<<<<<")
+    if failed_tests:
+        print("Failed tests: ")
+        print(failed_tests)
+    else :
+        print("All tests passed")
 
 
 register(
