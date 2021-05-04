@@ -77,11 +77,16 @@ def plugin_func(image, drawable):
 
     """
     Order of  is important.
-    Some s depend on objects created by earlier s,
+    Some tests depend on objects created by earlier tests,
     assuming a basic image was opened
     and not requiring the opened image to have any particular objects.
-    Test assume image with ID 1 is used for most s.
+    Test assume image with ID 1 is used for most tests.
     """
+
+    # Don't test a version of Scriptuf that does fixup for certain errors
+    do_test_fixup = False
+
+    # Some other tests that crash are commented out
 
     """
     Basic sanity
@@ -396,59 +401,91 @@ def plugin_func(image, drawable):
 
 
     """
-    GimpDrawable and GimpObjectArray of GimpDrawable
+    GimpDrawable
     """
 
     test("single GimpDrawable (a numeric ID in ScriptFu)",
         '(gimp-drawable-edit-clear (car (gimp-image-get-active-drawable  1)))',
         "success")
 
-    test("Error: Second arg is type ObjectArray a quoted list of bound variables",
-        '''(let*
-             (
-              (drawable 1)
-             )
-           (gimp-edit-copy 1 '(drawable))
-           )
-        ''',
-        "Error: Expected numeric in drawable list (drawable) \n")
 
-    test("Second arg is type ObjectArray a list of bound variables",
+    """
+    GimpObjectArray of GimpDrawable
+    """
+
+    """ Normal """
+    # This is the new, multi-layer signature for gimp-edit-copy
+
+    test("Second arg is type ObjectArray a vector of bound variables",
         '''(let*
              (
               (drawable 1)
              )
-           (gimp-edit-copy 1 (list drawable))
+           (gimp-edit-copy 1 (vector drawable))
            )
         ''',
         "success")
 
 
-    """
-    Enhanced v3 ScriptFu allows this changed signature from v2.
-    The signature was changed for multi-layer.
-    Expect ScriptFu to wrap the single GimpDrawable in a ObjectArray
-    Before the enhancement:
-    "Error: in script, wrong number of arguments for gimp-edit-copy (expected 2 but received 1) \n"
-    """
-    test("GimpObjectArray, passing a single drawable ID",
-        '(gimp-edit-copy 1)',
-        "success")
-    # Alternative script: '(gimp-edit-copy (gimp-image-get-active-drawable  1))',
-
-    # This is the new, multi-layer signature
-    test("GimpObjectArray, passing length numeric and list of ID's",
-        # Here, '(1)' is usually a valid drawable ID
-        "(gimp-edit-copy 1 '(1))",
+    test("GimpObjectArray, passing length numeric and constant vector of ID's",
+        # Here, '1' is usually a valid drawable ID
+        "(gimp-edit-copy 1 '#(1))",
         "success")
     # alternative script
     #"(gimp-edit-copy 1 (list 1))",
 
-    # With the fixup feature, Scriptfu will succeed here, discarding the "foo" as an extra arg
-    # Without the fixup feature, "Error: in script, expected type: list for argument 2 to gimp-edit-copy  \n")
-    test("Error: second arg is type ObjectArray but string passed",
-        '(gimp-edit-copy 1 "foo")',
-        "success")
+
+    """ GimpObjectArray errors in script """
+
+    test("Error: Second arg is type ObjectArray a quoted vector of bound variables",
+        '''(let*
+             (
+              (drawable 1)
+             )
+           (gimp-edit-copy 1 '#(drawable))
+           )
+        ''',
+        "Error: Expected numeric in drawable vector #(drawable) \n")
+
+    test("Error: Second arg is type ObjectArray a quoted vector of strings",
+        '''(gimp-edit-copy 1 '#("foo"))''',
+        '''Error: Expected numeric in drawable vector #("foo") \n''')
+
+
+    if do_test_fixup:
+        """
+        Enhanced v3 ScriptFu allows this changed signature from v2.
+        The signature was changed for multi-layer.
+        Expect ScriptFu to wrap the single GimpDrawable in a ObjectArray
+        Before the enhancement:
+        "Error: in script, wrong number of arguments for gimp-edit-copy (expected 2 but received 1) \n"
+        """
+        test("GimpObjectArray, passing a single drawable ID",
+            '(gimp-edit-copy 1)',
+            "success")
+        # Alternative script: '(gimp-edit-copy (gimp-image-get-active-drawable  1))',
+    else :
+        # This should print a warning to the log, then call the procedure, which fails
+        test("GimpObjectArray, passing a single drawable ID",
+            '(gimp-edit-copy 1)',
+            "Error: Procedure execution of gimp-edit-copy failed on invalid input arguments: "
+            "Procedure 'gimp-edit-copy' returned no return values \n")
+
+
+
+
+    if do_test_fixup:
+        # With the fixup feature, Scriptfu will succeed here, discarding the "foo" as an extra arg
+        # Without the fixup feature, "Error: in script, expected type: list for argument 2 to gimp-edit-copy  \n")
+        test("Error: second arg is type ObjectArray but string passed",
+            '(gimp-edit-copy 1 "foo")',
+            "success")
+    else:
+        # Without the fixup feature, ")
+        test("Error: second arg is type ObjectArray but string passed",
+            '(gimp-edit-copy 1 "foo")',
+            "Error: in script, expected type: vector for argument 2 to gimp-edit-copy  \n")
+
 
     test("Error: second arg is type ObjectArray but unquoted list passed",
         '(gimp-edit-copy 1 (1))',
@@ -469,8 +506,8 @@ def plugin_func(image, drawable):
     "success",
     '''
 
-    test("len 0 and empty list passed for GimpObjectArray",
-        "(gimp-edit-copy 0 ())",
+    test("len 0 and empty vector passed for GimpObjectArray",
+        "(gimp-edit-copy 0 #())",
         "Error: Procedure execution of gimp-edit-copy failed on invalid input arguments:"\
              " Procedure 'gimp-edit-copy' has been called with value '0' for argument 'num-drawables' (#1, type gint). This value is out of range. \n")
 
