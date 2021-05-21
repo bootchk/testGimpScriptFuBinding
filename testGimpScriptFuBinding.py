@@ -18,7 +18,7 @@ To evaluate Scheme, calls plug-in-script-fu-eval
 Checks the PDB status result and compare to expected,
 print Pass or Fail to console.
 
-To :
+To test:
 open terminal
 >export G_MESSAGES_DEBUG=scriptfu (optional, for debugging ScriptFu)
 >gimp
@@ -33,6 +33,14 @@ These do not mean the test failed
 (since we test that errored scripts return error messages.)
 
 
+Implementation notes:
+
+1) a PDB procedure status is string "success" on success
+2) tests use literal numerals:
+   1 for an enum
+   1 for the ID of image or drawable (usually exists)
+3) use the ScriptFu constant RUN-NONINTERACTIVE where needed (calling plugins versus INTERNAL PROC)
+
 TODO
 Write a single PDB procedure that takes/return all GIMP types.
 Use a template to call it.
@@ -41,8 +49,6 @@ Iterate, fuzz the template over edge tests for GIMP types.
 
 from gimpfu import *
 
-
-# Note that a PDB procedure status is string "success" on success
 failed_tests = {}
 
 def test(description, construct, expected_status):
@@ -209,26 +215,43 @@ def plugin_func(image, drawable):
         '(gimp-context-set-line-dash-pattern 2 () )',
         "Error: in script, expected type: vector for argument 2 to gimp-context-set-line-dash-pattern  \n")
 
-    # TODO:
-    # error: string array arg is empty: empty list
-    # '''(??? 0 '() )''')
-    # Hard to test , no PDB procedure (that we can  test with) takes a string array
+    # The test plugintaking a GStrv must exist, it is not in the GIMP repository.
+    # When the test plugin does not exist, these tests fail with a different error message.
+    # The only other procedure in the GIMP PDB taking string array is file-gih-save, hard to call and its buggy.
+    # 2 1 1 is runmode, image, drawable for the test plugin.
 
-    # TODO:
-    # error: string array arg is list of null string
-    # '''(??? 1 '("") )''')
-    # Hard to test, no PDB procedure (that we can test with) takes a string array
+    # An unquoted list still is marshalled to an empty string array
+    test("valid string array arg is empty, unquoted list",
+        '(python-fu-test-take-string-array RUN-NONINTERACTIVE 1 1 () )',
+        "success")
 
-    # TODO:
-    # valid string array passed as a list
-    # Hard to test , no PDB procedure (that we can test with) takes a string array
-    # '(??? 2 '("foo", "bar") )',
+    # Valid, a quoted empty list yields a string array
+    test("valid string array arg passed as empty quoted list",
+        '''(python-fu-test-take-string-array RUN-NONINTERACTIVE 1 1 '() )''',
+        "success")
+
+    # Valid, a list of empty strings is an array of two empty strings
+    test("valid string array arg passed as quoted list of empty count_strings",
+        '''(python-fu-test-take-string-array RUN-NONINTERACTIVE 1 1 '("" "") )''',
+        "success")
+
+    # !!! Pass image ID, drawable ID, quoted list
+    test("valid string array passed as a list",
+        '''(python-fu-test-take-string-array RUN-NONINTERACTIVE 1 1 '("foo" "bar") )''',
+        "success")
+
     """
     If G_MESSAGES_DEBUG=scriptfu, console should print like:
     (script-fu:127): scriptfu-DEBUG: 15:31:59.612: list has 2 elements
     (script-fu:127): scriptfu-DEBUG: 15:31:59.612: "foo"
     (script-fu:127): scriptfu-DEBUG: 15:31:59.612: "bar"
     """
+
+    test("error: vector passed for string array",
+        # pass a vector where list expected
+        '''(python-fu-test-take-string-array RUN-NONINTERACTIVE 1 1 #("foo" "bar") )''',
+        "execution error")  # OLD error message
+        # NEW "Error: in script, expected type: list for argument 4 to python-fu-test-take-string-array  \n")
 
     test("error: array arg with wrong, longer length",
         '(gimp-context-set-line-dash-pattern 2 #(1.0))',
